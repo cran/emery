@@ -126,6 +126,8 @@ estimate_ML_ordinal <-
       outer_sum <- outer_sum + phi_0ij[j, ] * inner_sum
     }
     A_i <- outer_sum + 0.5 * colSums(phi_1ij * phi_0ij)
+    dim(A_i) <- c(1, n_method) # changed from vector
+    dimnames(A_i) <- list(NULL, method_names) # changed from vector
     return(A_i)
   }
   calc_y_k <- function(){
@@ -183,7 +185,7 @@ estimate_ML_ordinal <-
   if(is.null(level_names)){level_names <- name_thing("level", n_level)}
   if(!all(c("pi_1_1", "phi_1ij_1", "phi_0ij_1", "n_level") %in% names(init)) |
      any(sapply(init, is.null))
-     ){init <- pollinate_ML_ordinal(t_k, n_level = n_level, level_names = level_names)}
+     ){init <- pollinate_ML(type = "ordinal", data = t_k, n_level = n_level, level_names = level_names)}
 
   p_t <- init$pi_1_1
   phi_1ij_t <- init$phi_1ij_1
@@ -275,7 +277,8 @@ pollinate_ML_ordinal <-
   function(data,
            n_level = NULL,
            threshold_level = ceiling(n_level / 2),
-           level_names = NULL){
+           level_names = NULL,
+           ...){
 
     t_k <- data
     n_method <- ncol(t_k)
@@ -367,7 +370,6 @@ plot_ML_ordinal <-
 
       AUC_data <-
         ML_est@results$A_i_est |>
-        as.list() |>
         data.frame() |>
         tidyr::pivot_longer(everything(), names_to = "method", values_to = "value") |>
         dplyr::mutate(label = paste0(method, ": ", sprintf("%0.3f", value))) |>
@@ -386,7 +388,7 @@ plot_ML_ordinal <-
         ggplot2::annotate("text", x = 0.7, y = 0.1, label = AUC_label, hjust = 0, vjust = 0) +
         ggplot2::scale_y_continuous("TPR", limits = c(0, 1), breaks = seq(0, 1, 0.1), expand = c(0, 0)) +
         ggplot2::scale_x_continuous("FPR", limits = c(0, 1), breaks = seq(0, 1, 0.1), expand = c(0, 0)) +
-        ggplot2::scale_color_brewer("", palette = "Set1", na.value = "gray30", drop = FALSE) +
+        ggplot2::scale_color_brewer("", palette = "Dark2", na.value = "gray30", drop = FALSE) +
         ggplot2::coord_fixed() +
         ggplot2::theme(panel.background = ggplot2::element_blank(),
                        panel.grid = ggplot2::element_line(color = "gray80"),
@@ -413,7 +415,7 @@ plot_ML_ordinal <-
         ggplot2::geom_line() +
         ggplot2::scale_y_continuous(q_kd, limits = c(0, 1), breaks = seq(0, 1, 0.1), expand = c(0, 0)) +
         ggplot2::scale_x_continuous("Iteration", limits = c(0, ML_est@iter)) +
-        ggplot2::scale_color_brewer("", palette = "Set1", na.value = "gray30", drop = FALSE) +
+        ggplot2::scale_color_brewer("", palette = "Dark2", na.value = "gray30", drop = FALSE) +
         ggplot2::theme(panel.background = ggplot2::element_blank(),
               panel.grid = ggplot2::element_line(color = "gray80"),
               axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5),
@@ -469,7 +471,7 @@ plot_ML_ordinal <-
       ggplot2::geom_histogram(bins = 40) +
       ggplot2::scale_y_continuous("Observations", limits = c(0, NA), expand = c(0, 0.5)) +
       ggplot2::scale_x_continuous(breaks = seq(0, 1, 0.05), expand = c(0, 0)) +
-      ggplot2::scale_fill_brewer("", palette = "Set1", na.value = "gray30", drop = FALSE) +
+      ggplot2::scale_fill_brewer("", palette = "Dark2", na.value = "gray30", drop = FALSE) +
       ggplot2::theme(panel.background = ggplot2::element_blank(),
             panel.grid = ggplot2::element_line(color = "gray80"),
             panel.spacing = unit(2, "lines"),

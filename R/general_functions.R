@@ -155,10 +155,13 @@ pollinate_ML <-
     data,
     ...){
     type <- match.arg(type)
+
+    if(apply(data, 2, FUN = function(i){stats::sd(i, na.rm = TRUE)}) |> {\(.)any(. == 0)}()) warning("Data from one or more methods has zero variance", call. = FALSE, immediate. = TRUE)
+
     switch (type,
-            binary = pollinate_ML_binary(type, data, ...),
-            ordinal = pollinate_ML_ordinal(type, data, ...),
-            continuous = pollinate_ML_continuous(type, data, ...)
+            binary = pollinate_ML_binary(data, ...),
+            ordinal = pollinate_ML_ordinal(data, ...),
+            continuous = pollinate_ML_continuous(data, ...)
     )
   }
 
@@ -171,12 +174,14 @@ pollinate_ML <-
 #' @inheritParams estimate_ML
 #'
 #' @param n_boot number of bootstrap estimates to compute
+#' @param n_study sample size to select for each bootstrap estimate
 #' @param seed optional seed for RNG
 #' @returns a list containing accuracy estimates, `v`, and the parameters used.
 #' \item{v_0}{result from original data}
 #' \item{v_star}{list containing results from each bootstrap resampling}
 #' \item{params}{list containing the parameters used}
 #' @export
+#' @importFrom utils setTxtProgressBar txtProgressBar
 #' @example man/examples/bootstrap_example.R
 
 boot_ML <-
@@ -184,6 +189,7 @@ boot_ML <-
     type = c("binary", "ordinal", "continuous"),
     data,
     n_boot = 100,
+    n_study = NULL,
     max_iter = 1000,
     tol = 1e-7,
     seed = NULL,
@@ -196,27 +202,119 @@ boot_ML <-
     v_0 <- estimate_ML(type, data, save_progress = FALSE)
 
     n_obs <- nrow(data)
+    if(is.null(n_study)) n_study <- n_obs
+
+    pb <- utils::txtProgressBar(min = 1, max = n_boot, style = 3)
 
     v_star <-
     lapply(1:n_boot, function(b){
-      tmp <- data[sample(n_obs, n_obs, replace = TRUE), ]
+      tmp <- data[sample(n_obs, n_study, replace = TRUE), ]
+      utils::setTxtProgressBar(pb, b)
       estimate_ML(type, tmp, save_progress = FALSE)@results
     })
 
+    close(pb)
+
     return(
-      list(
+      new_boot_ML(
         v_0 = v_0,
         v_star = v_star,
-        params = list(
-          data = data,
-          n_boot = n_boot,
-          max_iter = max_iter,
-          tol = tol,
-          seed = seed
-        )
-
-      )
+        data = data,
+        n_boot = n_boot,
+        n_study = n_study,
+        max_iter = max_iter,
+        tol = tol,
+        n_obs = n_obs,
+        seed = seed)
     )
-
   }
+
+
+#' @title Aggregate bootstrapped ML estimates
+#' @description
+#' `aggregate_boot_ML()` rearranges the bootstrap results from `boot_ML()` by
+#' statistic instead of bootstrap iteration.
+#'
+#' @param boot_ML_result a list returned by `bootML()`.
+#' @returns a named list of long format data frames containing aggregated statistic estimates.
+#' \item{boot_id}{index of bootstrap sample which resulted in value}
+#' \item{col_id}{value identifier}
+#' \item{row_id}{optional value identifier used when the result has more than 1 dimension}
+#' \item{value}{statistic value}
+#' @export
+#' @importFrom stats setNames
+#' @importFrom tidyr pivot_longer
+#' @importFrom tidyr any_of
+#' @example man/examples/bootstrap_example.R
+
+aggregate_boot_ML <-
+  function(
+    boot_ML_result = NULL
+  ){
+    lapply(names(boot_ML_result$v_0@results), function(w){
+      lapply(1:length(boot_ML_result$v_star), function(l){
+        cbind("boot_id" = l, do.call(cbind, boot_ML_result$v_star[[l]][w]))
+      }) |>
+        do.call(what = rbind) |>
+        {\(.) if(!is.null(rownames(.))) cbind(data.frame(., row.names = NULL), row_id = rownames(.)) else data.frame(.)}() |>
+        tidyr::pivot_longer(-tidyr::any_of(c("boot_id", "row_id")), names_to = "col_id")
+    }) |> stats::setNames(names(boot_ML_result$v_0@results))
+  }
+
+#' @title Plot univariate distributions of bootstrapped ML estimates
+#' @description
+#' `plot.boot_ML()` creates univariate plots of bootstrap results from `boot_ML()`.
+#' @param x a result created by calling `boot_ML` on a `MultiMethodMLEstimate` object.
+#' @param probs a vector of distribution quantile values to indicate with vertical lines.
+#' @param ... additional arguments.
+#' @returns a named list of named plots.
+#' @method plot boot_ML
+#' @export
+#' @import ggplot2
+#' @import dplyr
+#' @importFrom stats quantile median
+
+plot.boot_ML <-
+   function(x, probs = c(0.10, 0.50, 0.90), ...){
+     agg_results <- aggregate_boot_ML(x)
+     stats_to_plot <- names(agg_results)[names(agg_results) %in% c("prev_est", "se_est", "sp_est", "A_i_est", "A_j_est", "phi_0ij_est", "phi_1ij_est")]
+
+     lapply(stats_to_plot, function(x){
+
+       if(x %in% c("phi_0ij_est", "phi_1ij_est")){
+         agg_results[[x]] <- agg_results[[x]] |>
+           dplyr::group_by(boot_id, col_id) |>
+           dplyr::mutate(value = cumsum(value), row_id = paste0("j \u2264 ", row_id)) |>
+           # dplyr::mutate(value = cumsum(value), row_id = paste(row_id, "-", dplyr::lead(row_id))) |>
+           dplyr::slice_head(n = -1) |>
+           dplyr::ungroup()}
+
+       q_summary <-
+         dplyr::reframe(agg_results[[x]],
+                        value = stats::quantile(value, probs, na.rm = TRUE),
+                        quantile = probs,
+                        lty = as.integer(ceiling(abs(rank(probs) - median(rank(probs)))) + 1),
+                        .by = dplyr::any_of(c("col_id", "row_id")))
+
+         ggplot2::ggplot(agg_results[[x]], ggplot2::aes(x = value, color = if("row_id" %in% colnames(agg_results[[x]])) row_id else "Group")) +
+           ggplot2::geom_histogram(bins = 100, boundary = 0, position = "identity", ggplot2::aes(fill = ggplot2::after_scale(ggplot2::alpha(color, 0.5)))) +
+           ggplot2::geom_vline(data = q_summary, ggplot2::aes(xintercept = value, lty = lty, color = if("row_id" %in% colnames(agg_results[[x]])) row_id else "Group")) +
+           ggplot2::facet_grid(col_id ~ .) +
+           ggplot2::scale_x_continuous(x, limits = c(0, 1), expand = ggplot2::expansion(add = 0.01), breaks = seq(0, 1, 0.1)) +
+           ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, .1))) +
+           ggplot2::scale_color_brewer("ID", palette = "Dark2") +
+           ggplot2::scale_linetype_identity() +
+           ggplot2::theme(panel.background = ggplot2::element_blank(),
+                          panel.grid = ggplot2::element_line(color = "gray90"),
+                          axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5),
+                          axis.title.y = ggplot2::element_blank(),
+                          axis.text.y = ggplot2::element_blank(),
+                          axis.ticks.y = ggplot2::element_blank(),
+                          panel.grid.major.y = ggplot2::element_blank(),
+                          panel.grid.minor.y = ggplot2::element_blank(),
+                          legend.position = "bottom") +
+           ggplot2::ggtitle("Bootstrap Distribution")
+     })
+
+   }
 
