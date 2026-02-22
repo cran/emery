@@ -1,6 +1,8 @@
 
 #' S4 object containing the results of multi-method ML accuracy estimates
 #' @slot results a list of estimated accuracy statistics
+#' @slot data a matrix containing the raw data used for estimation
+#' @slot freqs a vector containing the frequencies at which each row in `data` was observed
 #' @slot names a list containing vectors of names of various dimensions
 #' @slot data a copy of the data used to generate the estimated values
 #' @slot iter an integer number of iterations needed for the EM algorithm to converge
@@ -15,6 +17,7 @@ setClass(
   slots = c(
     results = "list",
     data = "matrix",
+    freqs = "numeric",
     names = "list",
     iter = "numeric",
     prog = "list",
@@ -23,6 +26,7 @@ setClass(
   prototype = list(
     results = list(),
     data = matrix(),
+    freqs = NA_integer_,
     names = list(),
     iter = 0,
     prog = list(),
@@ -76,13 +80,14 @@ setMethod(
 #' @return a boot_ML object
 #'
 new_boot_ML <-
-  function(v_0, v_star, data, n_boot, n_study, max_iter, tol, n_obs, seed){
+  function(v_0, v_star, data, freqs = NULL, n_boot, n_study, max_iter, tol, n_obs, seed){
     structure(
       .Data = list(
         v_0 = v_0,
         v_star = v_star,
         params = list(
           data = data,
+          freqs = freqs,
           n_boot = n_boot,
           n_study = n_study,
           max_iter = max_iter,
@@ -95,4 +100,93 @@ new_boot_ML <-
     )
   }
 
+#' Return result from MultiMethodMLEstimate object
+#' @description
+#' Returns the result slot from a MultiMethodMLEstimate object
+#' @param x An object of class MultiMethodMLEstimate.
+#' @return Contents of `results` slot of the MultiMethodMLEstimate object.
+#' @export
+#'
 
+setGeneric("getResults", function(x){
+  standardGeneric("getResults")
+  })
+
+#' Return result from MultiMethodMLEstimate object
+#' @description
+#' Returns the result slot from a MultiMethodMLEstimate object
+#' @param x An object of class MultiMethodMLEstimate.
+#' @return Contents of `results` slot of the MultiMethodMLEstimate object.
+#' @export
+#'
+
+setMethod("getResults", signature("MultiMethodMLEstimate"), function(x){
+  x@results
+})
+
+#' Return names from MultiMethodMLEstimate object
+#' @description
+#' Returns the names slot from a MultiMethodMLEstimate object
+#' @param x An object of class MultiMethodMLEstimate.
+#' @param name type of names to extract, e.g. "method_names", "obs_names", "level_names"
+#' @return Contents of `names` slot of the MultiMethodMLEstimate object.
+#' @export
+#'
+
+setGeneric("getNames", function(x, name){
+  standardGeneric("getNames")
+  })
+
+#' Return names from MultiMethodMLEstimate object
+#' @description
+#' Returns the names slot from a MultiMethodMLEstimate object
+#' @param x An object of class MultiMethodMLEstimate.
+#' @param name type of names to extract, e.g. "method_names", "obs_names", "level_names"
+#' @return Contents of `names` slot of the MultiMethodMLEstimate object.
+#' @export
+#'
+
+setMethod("getNames", signature("MultiMethodMLEstimate"), function(x, name){
+  x@names[name]
+})
+
+#' Set frequencies of MultiMethodMLEstimate objects
+#' @description
+#' Set the freqs slot of a MultiMethodMLEstimate object. This can be used to update
+#' objects created using `emery` versions < 0.6.1 to work with newer versions.
+#' @param x An object of class MultiMethodMLEstimate.
+#' @param freqs A vector of non-negative integers
+#' @return A copy of the MultiMethodMLEstimate object with `freqs` in the appropriate slot.
+#' @export
+#'
+
+setGeneric("setFreqs", function(x, freqs = NULL){
+  standardGeneric("setFreqs")
+  })
+
+#' Set frequencies of MultiMethodMLEstimate objects
+#' @description
+#' Set the freqs slot of a MultiMethodMLEstimate object. This can be used to update
+#' objects created using `emery` versions < 0.6.1 to work with newer versions.
+#' @param x An object of class MultiMethodMLEstimate.
+#' @param freqs A vector of non-negative integers
+#' @return A copy of the MultiMethodMLEstimate object with `freqs` in the appropriate slot.
+#' @export
+#'
+
+setMethod("setFreqs", signature("MultiMethodMLEstimate"), function(x, freqs = NULL){
+
+  if(is.null(freqs)){freqs <- nrow(x@data)}
+
+  return(
+    new("MultiMethodMLEstimate",
+        results = x@results,
+        data = x@data,
+        freqs = freqs,
+        names = x@names,
+        iter = x@iter,
+        prog = x@prog,
+        type = x@type)
+  )
+
+})

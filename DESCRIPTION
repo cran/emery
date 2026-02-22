@@ -1,6 +1,6 @@
 Package: emery
 Title: Accuracy Statistic Estimation for Imperfect Gold Standards
-Version: 0.6.0
+Version: 0.7.0
 Authors@R: 
     person("Corie", "Drake", , "therealcfdrake@gmail.com", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0002-1517-7103"))
@@ -12,19 +12,20 @@ Description: Produce maximum likelihood estimates of common accuracy statistics
  continuous measurement methods.
 License: GPL (>= 3)
 Encoding: UTF-8
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 URL: https://github.com/therealcfdrake/emery
 BugReports: https://github.com/therealcfdrake/emery/issues
 Imports: stats, dplyr, ggplot2, purrr, tibble, tidyr, utils, methods,
         mvtnorm, stringr, Rdpack
 RdMacros: Rdpack
-Suggests: knitr, rmarkdown
+Suggests: knitr, rmarkdown, testthat (>= 3.0.0)
 VignetteBuilder: knitr
+Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2025-06-09 13:52:46 UTC; corie
+Packaged: 2026-02-22 04:25:05 UTC; corie
 Author: Corie Drake [aut, cre, cph] (ORCID:
     <https://orcid.org/0000-0002-1517-7103>)
 Maintainer: Corie Drake <therealcfdrake@gmail.com>
 Depends: R (>= 4.2.0)
 Repository: CRAN
-Date/Publication: 2025-06-09 14:10:02 UTC
+Date/Publication: 2026-02-22 20:00:02 UTC
